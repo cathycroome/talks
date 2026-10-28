@@ -47,25 +47,26 @@ const CONFIG = {
              fields: "Main Field", subs: "Subfield", topics: "Topic Tags" },
   // Optional: force a subfield under a main field, e.g. { "Educational Psychology": "Psychology" }.
   // Otherwise the parent is found from the name ("... Psychology" goes under Psychology), then from the data.
-  parents: {},
+  parents: { "Artificial Intelligence": "Computer Science", "Creative Computing": "Art" },
   fallback: "Unassigned",                       // used when Field or Subfield is empty
   honorifics: /^(Dr|Prof|Professor)\.?\s+/i,
 
-  // Colour groups for topic tags (tags not listed go to "Other")
+  // Colour groups for topic tags (tags not listed go to "Other"). Matching ignores capitals, spaces and punctuation.
   clusters: {
     "Perception & sensation": ["Vision", "Perception", "Illusion", "Sensation", "Touch", "Olfaction", "Attention"],
     "Mind & consciousness":   ["Consciousness science", "Computational neurophenomenology", "Philosophy of mind",
                                "Philosophy of science", "Predictive coding", "Intelligence", "Critique"],
-    "Brain & behaviour":      ["Neurophysiology", "Functional connectivity", "Behaviour", "Social Behaviour", "Decision making"],
-    "AI, ML & statistics":    ["AI --> Cognition and Neuro", "Cognition and Neuro --> AI", "Generative models",
+    "Brain & behaviour":      ["Neurophysiology", "Functional connectivity", "Behaviour", "Social behaviour", "Decision making"],
+    "AI, ML & statistics":    ["AI -> cognition and neuro", "Cognition and neuro -> AI", "Generative models",
                                "Generative modelling", "Reinforcement learning", "Computer vision", "Creative computing",
-                               "Automated scientific discovery", "Model selection", "Model efficiency", "Statistics"],
+                               "Automated scientific discovery", "Model selection", "Model efficiency", "Statistics",
+                               "Explainable / interpretable AI", "Neuro-symbolic AI"],
     "Applied & clinical":     ["Dementia", "Biomarkers", "Clinical trials", "Psychedelics", "Ethics",
                                "Accessibility", "Education"],
   },
   colors: {
     fields: { "Neuroscience":"#ee6a5e", "Cognitive Science":"#c4cf6a", "Philosophy":"#b48ae0",
-              "Psychology":"#5fb58a", "Art":"#6aa7e8", "Unassigned":"#9c9b95" },
+              "Psychology":"#5fb58a", "Art":"#6aa7e8", "Computer Science":"#4fc1c9", "Unassigned":"#9c9b95" },
     clusters: {},
   },
   palette:        ["#ee6a5e","#e0884f","#e9b95f","#5fb58a","#e07aa5","#b48ae0","#6aa7e8","#4fc1c9","#b98b6e","#c4cf6a"],
@@ -171,7 +172,8 @@ function draw(talks) {
 
   // --- ordering: topics by group then popularity; fields by their topics; subfields grouped under their main field
   const groupNames = Object.keys(CONFIG.clusters);
-  const groupOf = t => { const i = groupNames.findIndex(n => CONFIG.clusters[n].includes(t)); return i < 0 ? groupNames.length : i; };
+  const norm = s => s.toLowerCase().replace(/[^a-z0-9]+/g, "");
+  const groupOf = t => { const i = groupNames.findIndex(n => CONFIG.clusters[n].some(x => norm(x) === norm(t))); return i < 0 ? groupNames.length : i; };
   const topics = [...m.counts.topic.keys()].sort((a, b) =>
     groupOf(a) - groupOf(b) || m.counts.topic.get(b) - m.counts.topic.get(a) || a.localeCompare(b));
   const topicIndex = new Map(topics.map((t, i) => [t, i]));
