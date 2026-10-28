@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Talks: field, subfield and topic tags</title>
+<style>
+  :root { --bg:#fbfaf8; --fg:#1c1c1c; --muted:#6b6b6b; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#171717; --fg:#eee; --muted:#9a9a9a; } }
+  body { margin:0; padding:24px 16px; background:var(--bg); color:var(--fg);
+         font:14px/1.4 -apple-system,"Segoe UI",Helvetica,Arial,sans-serif; }
+  #chart { overflow-x:auto; }
+  svg { display:block; max-width:none; margin:0 auto; }
+  text { fill:var(--fg); font-size:12px; }
+  .heading { fill:var(--muted); font-size:11px; letter-spacing:.08em; text-transform:uppercase; }
+  .halo { paint-order:stroke; stroke:var(--bg); stroke-width:3px; stroke-linejoin:round; }
+  .leader { stroke:var(--muted); stroke-opacity:.3; stroke-dasharray:2 3; }
+
+  .ribbon { fill-opacity:.32; transition:fill-opacity .15s; }
+  .node, .dot, .arc { transition:opacity .15s; }
+  .arc { opacity:.6; }
+  .band { opacity:0; transition:opacity .15s; }
+
+  .dim .ribbon { fill-opacity:.05; }
+  .dim .ribbon.on { fill-opacity:.7; }
+  .dim .node, .dim .dot, .dim .arc { opacity:.15; }
+  .dim .node.on, .dim .dot.on, .dim .arc.on { opacity:1; }
+  .dim .band.on { opacity:.18; }
+
+  #legend { display:flex; flex-wrap:wrap; gap:6px 16px; margin-top:10px; font-size:12px; color:var(--muted); }
+  #legend span { cursor:pointer; }
+  #legend i { display:inline-block; width:10px; height:10px; margin-right:5px; border-radius:2px; }
+  #caption { min-height:5.6em; margin-top:10px; font-size:13px; }
+</style>
+</head>
+<body>
+
+<div id="chart"><svg id="svg"></svg></div>
+<div id="legend"></div>
+<div id="caption">&nbsp;</div>
+
+<script>
+/* ============================== CONFIG ============================== */
+const CONFIG = {
+  csv: "export.csv",
+  columns: { title: "Meeting name", speaker: "Speaker", institution: "Associated Institution",
+             fields: "Main Field", subs: "Subfield", topics: "Topic Tags" },
+  // Optional: force a subfield under a main field, e.g. { "Educational Psychology": "Psychology" }.
+  // Otherwise the parent is found from the name ("... Psychology" goes under Psychology), then from the data.
+  parents: {},
+  fallback: "Unassigned",                       // used when Field or Subfield is empty
+  honorifics: /^(Dr|Prof|Professor)\.?\s+/i,
+
+  // Colour groups for topic tags (tags not listed go to "Other")
+  clusters: {
+    "Perception & sensation": ["Vision", "Perception", "Illusion", "Sensation", "Touch", "Olfaction", "Attention"],
+    "Mind & consciousness":   ["Consciousness science", "Computational neurophenomenology", "Philosophy of mind",
+                               "Philosophy of science", "Predictive coding", "Intelligence", "Critique"],
+    "Brain & behaviour":      ["Neurophysiology", "Functional connectivity", "Behaviour", "Social Behaviour", "Decision making"],
+    "AI, ML & statistics":    ["AI --> Cognition and Neuro", "Cognition and Neuro --> AI", "Generative models",
+                               "Generative modelling", "Reinforcement learning", "Computer vision", "Creative computing",
+                               "Automated scientific discovery", "Model selection", "Model efficiency", "Statistics"],
+    "Applied & clinical":     ["Dementia", "Biomarkers", "Clinical trials", "Psychedelics", "Ethics",
+                               "Accessibility", "Education"],
+  },
+  colors: {
+    fields: { "Neuroscience":"#ee6a5e", "Cognitive Science":"#c4cf6a", "Philosophy":"#b48ae0",
+              "Psychology":"#5fb58a", "Art":"#6aa7e8", "Unassigned":"#9c9b95" },
+    clusters: {},
+  },
+  palette:        ["#ee6a5e","#e0884f","#e9b95f","#5fb58a","#e07aa5","#b48ae0","#6aa7e8","#4fc1c9","#b98b6e","#c4cf6a"],
+  clusterPalette: ["#5aa9c9","#c98cd8","#8fc46a","#f0a04b","#e8667a","#8a8fe0","#d9c05a"],
+
+  unit: 13, gap: 4, clusterGap: 12, top: 50, nodeW: 14,
+  flow: [230, 420],      // width of the Field->Subfield and Subfield->Topic bands
+};
+
+/* ============================== HELPERS ============================== */
+const $ = id => document.getElementById(id);
+const sum = xs => xs.reduce((a, b) => a + b, 0);
+const NS = "http://www.w3.org/2000/svg";
+const KINDS = ["field", "sub", "topic"];
+const PROP = { field: "fields", sub: "subs", topic: "topics" };
+
+function svgEl(tag, attrs = {}, parent) {
+  const el = document.createElementNS(NS, tag);
+  for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
+  if (parent) parent.appendChild(el);
+  return el;
+}
+
+/* ============================== DATA ============================== */
+function parseCSV(text) {
+  const rows = [[]];
+  let cell = "", quoted = false;
+  const endCell = () => { rows[rows.length - 1].push(cell); cell = ""; };
+  text = text.replace(/^\uFEFF/, "");
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (quoted) {
+      if (ch === '"' && text[i + 1] === '"') { cell += '"'; i++; }
+      else if (ch === '"') quoted = false;
+      else cell += ch;
+    } else if (ch === '"') quoted = true;
+    else if (ch === ",") endCell();
+    else if (ch === "\n" || ch === "\r") {
+      if (ch === "\r" && text[i + 1] === "\n") i++;
+      endCell(); rows.push([]);
+    } else cell += ch;
+  }
+  endCell();
+  const [header, ...body] = rows.filter(r => r.some(c => c.trim()));
+  if (!header) return [];
+  return body.map(r => Object.fromEntries(header.map((h, i) => [h.trim(), r[i] ?? ""])));
+}
+
+function readTalks(rows) {
+  const { columns: c, honorifics, fallback } = CONFIG;
+  const split = s => (s || "").split(",").map(x => x.trim()).filter(Boolean);
+  const orFallback = xs => xs.length ? xs : [fallback];
+  return rows.map(r => ({
+    title: (r[c.title] || "").trim(),
+    speaker: split(r[c.speaker]).map(n => n.replace(honorifics, "")).join(" & "),
+    institution: split(r[c.institution]).join(" / "),
+    fields: orFallback(split(r[c.fields])),
+    subs: orFallback(split(r[c.subs])),
+    topics: split(r[c.topics]),
+  })).filter(t => t.title && t.topics.length);
+}
+
+const describe = t => t.title + (t.speaker ? ` (${t.speaker}${t.institution ? ", " + t.institution : ""})` : "");
+
+/* Counts, ribbons and overlaps. A ribbon joins two tags in neighbouring columns (Field-Subfield or
+   Subfield-Topic). Every talk gives each tag exactly one unit of height, split across its ribbons. */
+function buildModel(talks) {
+  const counts = Object.fromEntries(KINDS.map(k => [k, new Map()]));
+  const segs = [new Map(), new Map()];
+  const pairs = { field: new Map(), topic: new Map() };
+  const bump = (m, k) => m.set(k, (m.get(k) || 0) + 1);
+
+  for (const talk of talks) {
+    const tags = KINDS.map(k => talk[PROP[k]]);
+    KINDS.forEach((k, i) => tags[i].forEach(x => bump(counts[k], x)));
+    for (const s of [0, 1]) for (const a of tags[s]) for (const b of tags[s + 1]) {
+      const key = a + "\0" + b;
+      const r = segs[s].get(key) || segs[s].set(key, { a, b, left: 0, right: 0, talks: [] }).get(key);
+      r.left += 1 / tags[s + 1].length;
+      r.right += 1 / tags[s].length;
+      r.talks.push(talk);
+    }
+    for (const kind of ["field", "topic"]) {
+      const list = talk[PROP[kind]];
+      for (let i = 0; i < list.length; i++) for (let j = i + 1; j < list.length; j++) {
+        const key = [list[i], list[j]].sort().join("\0");
+        const p = pairs[kind].get(key) || pairs[kind].set(key, { kind, tags: [list[i], list[j]], talks: [] }).get(key);
+        p.talks.push(talk);
+      }
+    }
+  }
+  return { counts, segs: segs.map(s => [...s.values()]), pairs: { field: [...pairs.field.values()], topic: [...pairs.topic.values()] } };
+}
+
+/* ============================== LAYOUT + DRAW ============================== */
+function draw(talks) {
+  const svg = $("svg"), legend = $("legend");
+  svg.innerHTML = ""; legend.innerHTML = ""; clearHighlight();
+  if (!talks.length) { $("caption").textContent = "No talks found. Check the column names in CONFIG."; return; }
+
+  const { unit, gap, clusterGap, top, nodeW, flow } = CONFIG;
+  const m = buildModel(talks);
+
+  // --- ordering: topics by group then popularity; fields by their topics; subfields grouped under their main field
+  const groupNames = Object.keys(CONFIG.clusters);
+  const groupOf = t => { const i = groupNames.findIndex(n => CONFIG.clusters[n].includes(t)); return i < 0 ? groupNames.length : i; };
+  const topics = [...m.counts.topic.keys()].sort((a, b) =>
+    groupOf(a) - groupOf(b) || m.counts.topic.get(b) - m.counts.topic.get(a) || a.localeCompare(b));
+  const topicIndex = new Map(topics.map((t, i) => [t, i]));
+  const avgTopic = (kind, name) => {
+    const xs = talks.filter(t => t[PROP[kind]].includes(name)).flatMap(t => t.topics.map(x => topicIndex.get(x)));
+    return sum(xs) / xs.length;
+  };
+  const fields = [...m.counts.field.keys()].sort((a, b) => avgTopic("field", a) - avgTopic("field", b));
+  const dominantField = s => {
+    const w = new Map();
+    talks.filter(t => t.subs.includes(s)).forEach(t => t.fields.forEach(f => w.set(f, (w.get(f) || 0) + 1 / t.fields.length)));
+    return [...w].sort((a, b) => b[1] - a[1] || fields.indexOf(a[0]) - fields.indexOf(b[0]))[0][0];
+  };
+  const parentField = s => {
+    if (CONFIG.parents[s]) return CONFIG.parents[s];
+    const byName = fields.filter(f => s.toLowerCase().endsWith(f.toLowerCase()) || s.toLowerCase().startsWith(f.toLowerCase()));
+    return byName.sort((a, b) => b.length - a.length)[0] || dominantField(s);
+  };
+  const subs = [...m.counts.sub.keys()].sort((a, b) =>
+    fields.indexOf(parentField(a)) - fields.indexOf(parentField(b)) || avgTopic("sub", a) - avgTopic("sub", b));
+  const order = { field: fields, sub: subs, topic: topics };
+  const groups = groupNames.length ? [...groupNames, ...(topics.some(t => groupOf(t) === groupNames.length) ? ["Other"] : [])] : [];
+
+  // --- colours
+  const fieldColor = Object.fromEntries(fields.map((f, i) => [f, CONFIG.colors.fields[f] || CONFIG.palette[i % CONFIG.palette.length]]));
+  const groupColor = g => CONFIG.colors.clusters[groups[g]] || CONFIG.clusterPalette[g % CONFIG.clusterPalette.length];
+  const color = { field: f => fieldColor[f], sub: s => fieldColor[parentField(s)], topic: t => groups.length ? groupColor(groupOf(t)) : "#888" };
+
+  // --- horizontal positions
+  const ctx = document.createElement("canvas").getContext("2d");
+  ctx.font = "12px -apple-system, Helvetica, Arial, sans-serif";
+  const label = (kind, name) => `${name} (${m.counts[kind].get(name)})`;
+  const textW = s => ctx.measureText(s).width * 1.05;
+  const maxW = kind => Math.max(...order[kind].map(n => textW(label(kind, n))));
+  const gx = 64;
+  const xf = gx + 28 + maxW("field") + 8 + nodeW;      // right edge of the Field blocks
+  const xs = xf + flow[0];                              // left edge of the Subfield blocks
+  const xt = xs + nodeW + flow[1];                      // left edge of the Topic blocks
+  const gxr = xt + nodeW + 8 + maxW("topic") + 28;
+  const width = Math.round(gxr + 76);
+
+  // --- vertical positions: every column stretches to the tallest
+  const sizes = Object.fromEntries(KINDS.map(k => [k, order[k].map(n => m.counts[k].get(n) * unit)]));
+  const gaps = {
+    field: fields.map((_, i) => i ? gap + 6 : 0),
+    sub: subs.map((s, i) => i ? (parentField(subs[i - 1]) === parentField(s) ? gap : clusterGap) : 0),
+    topic: topics.map((t, i) => i ? (groupOf(topics[i - 1]) === groupOf(t) ? gap : clusterGap) : 0),
+  };
+  const natural = k => sum(sizes[k]) + sum(gaps[k]);
+  const height = Math.max(...KINDS.map(natural));
+  const stack = k => {
+    const slack = sizes[k].length > 1 ? (height - natural(k)) / (sizes[k].length - 1) : 0;
+    let y = top;
+    return sizes[k].map((s, i) => { if (i) y += gaps[k][i] + slack; const at = y; y += s; return at; });
+  };
+  const nodes = {};
+  for (const k of KINDS) {
+    nodes[k] = new Map();
+    stack(k).forEach((y, i) => nodes[k].set(order[k][i], { name: order[k][i], y, h: sizes[k][i], inUsed: 0, outUsed: 0, color: color[k](order[k][i]) }));
+  }
+  const mid = n => n.y + n.h / 2;
+
+  const totalHeight = height + top + 30;
+  svg.setAttribute("viewBox", `0 0 ${width} ${totalHeight}`);
+  svg.setAttribute("width", width);
+  svg.setAttribute("height", totalHeight);
+  const heading = (x, anchor, text) => svgEl("text", { x, y: 28, class: "heading", "text-anchor": anchor }, svg).textContent = text;
+  heading(xf - nodeW - 8, "end", "Main field");
+  heading(xs, "start", "Subfield");
+  heading(xt + nodeW + 8, "start", "Topic tags");
+
+  // --- group bands behind the topic column (shown on legend hover)
+  const bands = groups.map((_, g) => {
+    const ns = topics.filter(t => groupOf(t) === g).map(t => nodes.topic.get(t));
+    if (!ns.length) return null;
+    const a = ns[0].y - 4, b = ns[ns.length - 1].y + ns[ns.length - 1].h + 4;
+    return svgEl("rect", { x: xt - 10, y: a, width: gxr + 16 - (xt - 10), height: b - a, rx: 8, fill: groupColor(g), class: "band" }, svg);
+  });
+
+  // --- ribbons: tapered so block heights equal tag counts at both ends
+  const ribbonLayer = svgEl("g", {}, svg), ribbonEls = [];
+  m.segs.forEach((list, s) => {
+    const [ka, kb] = [KINDS[s], KINDS[s + 1]];
+    const xa = s ? xs + nodeW : xf, xb = s ? xt : xs, mx = (xa + xb) / 2;
+    for (const a of order[ka]) list.filter(r => r.a === a).sort((p, q) => order[kb].indexOf(p.b) - order[kb].indexOf(q.b))
+      .forEach(r => { const n = nodes[ka].get(a); r.y1 = n.y + n.outUsed; n.outUsed += r.left * unit; });
+    for (const b of order[kb]) list.filter(r => r.b === b).sort((p, q) => order[ka].indexOf(p.a) - order[ka].indexOf(q.a))
+      .forEach(r => { const n = nodes[kb].get(b); r.y2 = n.y + n.inUsed; n.inUsed += r.right * unit; });
+    list.forEach(r => {
+      const w1 = r.left * unit, w2 = r.right * unit;
+      r.el = svgEl("path", { class: "ribbon", fill: nodes[ka].get(r.a).color,
+        d: `M${xa},${r.y1} C${mx},${r.y1} ${mx},${r.y2} ${xb},${r.y2} L${xb},${r.y2 + w2} C${mx},${r.y2 + w2} ${mx},${r.y1 + w1} ${xa},${r.y1 + w1} Z` }, ribbonLayer);
+      ribbonEls.push(r);
+    });
+  });
+
+  // --- nodes (Subfield labels sit over the ribbons, so they get a halo)
+  const nodeEls = [];
+  const addNode = (kind, n, x, anchor, textX, cls = "") => {
+    const g = svgEl("g", { class: "node" }, svg);
+    svgEl("rect", { x, y: n.y, width: nodeW, height: n.h, rx: 2, fill: n.color }, g);
+    svgEl("text", { x: textX, y: mid(n) + 4, "text-anchor": anchor, class: cls }, g).textContent = label(kind, n.name);
+    nodeEls.push({ kind, name: n.name, el: g });
+    onHover(g, () => hoverNode(kind, n.name));
+  };
+  nodes.field.forEach(n => addNode("field", n, xf - nodeW, "end", xf - nodeW - 8));
+  nodes.sub.forEach(n => addNode("sub", n, xs, "start", xs + nodeW + 6, "halo"));
+  nodes.topic.forEach(n => addNode("topic", n, xt, "start", xt + nodeW + 8));
+
+  // --- overlap arcs in the outer margins (fields on the left, topics on the right)
+  const dotEls = new Map(), arcEls = [];
+  const side = {
+    field: { x: gx, dir: -1, width: k => 4 + 4 * (k - 1), leaderTo: n => xf - nodeW - 8 - textW(label("field", n.name)) - 8 },
+    topic: { x: gxr, dir: 1, width: k => 2 + 2.5 * (k - 1), leaderTo: n => xt + nodeW + 8 + textW(label("topic", n.name)) + 8 },
+  };
+  for (const kind of ["field", "topic"]) {
+    const s = side[kind], pairsHere = m.pairs[kind];
+    for (const name of new Set(pairsHere.flatMap(p => p.tags))) {
+      const n = nodes[kind].get(name);
+      const [from, to] = kind === "field" ? [s.x + 6, s.leaderTo(n)] : [s.leaderTo(n), s.x - 6];
+      svgEl("line", { class: "leader", x1: from, x2: to, y1: mid(n), y2: mid(n) }, svg);
+      dotEls.set(kind + ":" + name, svgEl("circle", { class: "dot", cx: s.x, cy: mid(n), r: kind === "field" ? 5 : 3.5, fill: n.color }, svg));
+    }
+    for (const p of pairsHere) {
+      p.tags.sort((a, b) => order[kind].indexOf(a) - order[kind].indexOf(b));
+      const [a, b] = p.tags.map(t => nodes[kind].get(t));
+      const bulge = Math.min(14 + (mid(b) - mid(a)) * 0.2, 54) * 1.33 * s.dir;
+      const d = `M${s.x},${mid(a)} C${s.x + bulge},${mid(a)} ${s.x + bulge},${mid(b)} ${s.x},${mid(b)}`;
+      const w = s.width(p.talks.length);
+      p.el = svgEl("path", { d, fill: "none", stroke: a.color, "stroke-width": w, "stroke-linecap": "round", class: "arc", "pointer-events": "none" }, svg);
+      onHover(svgEl("path", { d, fill: "none", stroke: "transparent", "stroke-width": Math.max(w, 10) }, svg), () => hoverArc(p));
+      arcEls.push(p);
+    }
+  }
+
+  // --- legend for the topic groups
+  groups.forEach((name, g) => {
+    if (!bands[g]) return;
+    const span = document.createElement("span");
+    span.innerHTML = `<i style="background:${groupColor(g)}"></i>${name}`;
+    onHover(span, () => hoverGroup(g));
+    legend.appendChild(span);
+  });
+
+  /* ============================== INTERACTION ============================== */
+  const sentence = (title, ts) => `${title} (${ts.length} talk${ts.length === 1 ? "" : "s"}): ${ts.map(describe).join(" · ")}`;
+
+  // Highlight whole talks: every tag, ribbon and arc that belongs to the chosen talks stays lit.
+  // `onlyTopics` (a Set) narrows the topic side, used for the legend groups.
+  function highlight(chosen, caption, band = -1, onlyTopics = null) {
+    const lit = Object.fromEntries(KINDS.map(k => [k, new Set(chosen.flatMap(t => t[PROP[k]]))]));
+    if (onlyTopics) lit.topic = new Set([...lit.topic].filter(t => onlyTopics.has(t)));
+    const used = r => r.talks.some(t => chosen.includes(t));
+    svg.classList.add("dim");
+    nodeEls.forEach(n => n.el.classList.toggle("on", lit[n.kind].has(n.name)));
+    dotEls.forEach((el, k) => el.classList.toggle("on", lit[k.split(":")[0]].has(k.slice(k.indexOf(":") + 1))));
+    ribbonEls.forEach(r => r.el.classList.toggle("on", used(r) && (!onlyTopics || !r.topicSide || onlyTopics.has(r.b))));
+    arcEls.forEach(p => p.el.classList.toggle("on", used(p) && p.tags.every(t => lit[p.kind].has(t))));
+    bands.forEach((b, i) => b && b.classList.toggle("on", i === band));
+    $("caption").textContent = caption;
+  }
+  m.segs[1].forEach(r => r.topicSide = true);
+
+  function hoverNode(kind, name) {
+    const ts = talks.filter(t => t[PROP[kind]].includes(name));
+    highlight(ts, sentence(name, ts));
+  }
+  function hoverArc(p) { highlight(p.talks, sentence(p.tags.join(" + "), p.talks)); }
+  function hoverGroup(g) {
+    const inGroup = new Set(topics.filter(t => groupOf(t) === g));
+    const ts = talks.filter(t => t.topics.some(x => inGroup.has(x)));
+    highlight(ts, sentence(groups[g], ts), g, inGroup);
+  }
+}
+
+function onHover(el, handler) {
+  el.style.cursor = "pointer";
+  el.addEventListener("mouseenter", handler);
+  el.addEventListener("click", handler);
+  el.addEventListener("mouseleave", clearHighlight);
+}
+function clearHighlight() {
+  $("svg").classList.remove("dim");
+  $("caption").innerHTML = "&nbsp;";
+}
+
+/* ============================== LOAD ============================== */
+fetch(CONFIG.csv)
+  .then(r => { if (!r.ok) throw new Error(r.status); return r.text(); })
+  .then(text => draw(readTalks(parseCSV(text))))
+  .catch(err => { $("caption").textContent = `Could not load ${CONFIG.csv} (${err.message}). Is it next to this page and served over http?`; });
+</script>
+</body>
+</html>
