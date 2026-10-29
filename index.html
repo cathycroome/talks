@@ -27,31 +27,34 @@
   .dim .node.on, .dim .dot.on, .dim .arc.on { opacity:1; }
   .dim .band.on { opacity:.18; }
 
-  #legend { display:flex; flex-wrap:wrap; gap:6px 16px; margin-top:10px; font-size:12px; color:var(--muted); }
+  #legend-wrap { margin-top:10px; font-size:12px; color:var(--muted); }
+  #legend { display:flex; flex-wrap:wrap; gap:6px 16px; align-items:center; }
+  #legend-label { font-size:11px; letter-spacing:.08em; text-transform:uppercase; margin-right:4px; }
   #legend span { cursor:pointer; }
   #legend i { display:inline-block; width:10px; height:10px; margin-right:5px; border-radius:2px; }
   #caption { min-height:5.6em; margin-top:10px; font-size:13px; }
+  #page-title { font-size:16px; font-weight:600; margin:0 0 16px; color:var(--fg); letter-spacing:-.01em; }
 </style>
 </head>
 <body>
 
+<h1 id="page-title">Sussex Neuroscience PhD Year 1: Attended Talks</h1>
 <div id="chart"><svg id="svg"></svg></div>
-<div id="legend"></div>
+<div id="legend-wrap">
+  <div id="legend"></div>
+</div>
 <div id="caption">&nbsp;</div>
 
 <script>
 /* ============================== CONFIG ============================== */
 const CONFIG = {
   csv: "export.csv",
-  columns: { title: "Meeting name", speaker: "Speaker", institution: "Associated Institution",
-             fields: "Main Field", subs: "Subfield", topics: "Topic Tags" },
-  // Optional: force a subfield under a main field, e.g. { "Educational Psychology": "Psychology" }.
-  // Otherwise the parent is found from the name ("... Psychology" goes under Psychology), then from the data.
+  columns: { title: "Talk", speaker: "Speaker", institution: "Associated Institution",
+             fields: "Main Field", subs: "Subfield", topics: "Tags" },
   parents: { "Artificial Intelligence": "Computer Science", "Creative Computing": "Art" },
-  fallback: "Unassigned",                       // used when Field or Subfield is empty
+  fallback: "Unassigned",
   honorifics: /^(Dr|Prof|Professor)\.?\s+/i,
 
-  // Colour groups for topic tags (tags not listed go to "Other"). Matching ignores capitals, spaces and punctuation.
   clusters: {
     "Perception & sensation": ["Vision", "Perception", "Illusion", "Sensation", "Touch", "Olfaction", "Attention"],
     "Mind & consciousness":   ["Consciousness science", "Computational neurophenomenology", "Philosophy of mind",
@@ -73,7 +76,7 @@ const CONFIG = {
   clusterPalette: ["#5aa9c9","#c98cd8","#8fc46a","#f0a04b","#e8667a","#8a8fe0","#d9c05a"],
 
   unit: 13, gap: 4, clusterGap: 12, top: 50, nodeW: 14,
-  flow: [230, 420],      // width of the Field->Subfield and Subfield->Topic bands
+  flow: [230, 420],
 };
 
 /* ============================== HELPERS ============================== */
@@ -131,8 +134,6 @@ function readTalks(rows) {
 
 const describe = t => t.title + (t.speaker ? ` (${t.speaker}${t.institution ? ", " + t.institution : ""})` : "");
 
-/* Counts, ribbons and overlaps. A ribbon joins two tags in neighbouring columns (Field-Subfield or
-   Subfield-Topic). Every talk gives each tag exactly one unit of height, split across its ribbons. */
 function buildModel(talks) {
   const counts = Object.fromEntries(KINDS.map(k => [k, new Map()]));
   const segs = [new Map(), new Map()];
@@ -164,13 +165,12 @@ function buildModel(talks) {
 /* ============================== LAYOUT + DRAW ============================== */
 function draw(talks) {
   const svg = $("svg"), legend = $("legend");
-  svg.innerHTML = ""; legend.innerHTML = ""; clearHighlight();
+  svg.innerHTML = ""; legend.innerHTML = '<span id="legend-label">Themes</span>'; clearHighlight();
   if (!talks.length) { $("caption").textContent = "No talks found. Check the column names in CONFIG."; return; }
 
   const { unit, gap, clusterGap, top, nodeW, flow } = CONFIG;
   const m = buildModel(talks);
 
-  // --- ordering: topics by group then popularity; fields by their topics; subfields grouped under their main field
   const groupNames = Object.keys(CONFIG.clusters);
   const norm = s => s.toLowerCase().replace(/[^a-z0-9]+/g, "");
   const groupOf = t => { const i = groupNames.findIndex(n => CONFIG.clusters[n].some(x => norm(x) === norm(t))); return i < 0 ? groupNames.length : i; };
@@ -197,25 +197,22 @@ function draw(talks) {
   const order = { field: fields, sub: subs, topic: topics };
   const groups = groupNames.length ? [...groupNames, ...(topics.some(t => groupOf(t) === groupNames.length) ? ["Other"] : [])] : [];
 
-  // --- colours
   const fieldColor = Object.fromEntries(fields.map((f, i) => [f, CONFIG.colors.fields[f] || CONFIG.palette[i % CONFIG.palette.length]]));
   const groupColor = g => CONFIG.colors.clusters[groups[g]] || CONFIG.clusterPalette[g % CONFIG.clusterPalette.length];
   const color = { field: f => fieldColor[f], sub: s => fieldColor[parentField(s)], topic: t => groups.length ? groupColor(groupOf(t)) : "#888" };
 
-  // --- horizontal positions
   const ctx = document.createElement("canvas").getContext("2d");
   ctx.font = "12px -apple-system, Helvetica, Arial, sans-serif";
   const label = (kind, name) => `${name} (${m.counts[kind].get(name)})`;
   const textW = s => ctx.measureText(s).width * 1.05;
   const maxW = kind => Math.max(...order[kind].map(n => textW(label(kind, n))));
   const gx = 64;
-  const xf = gx + 28 + maxW("field") + 8 + nodeW;      // right edge of the Field blocks
-  const xs = xf + flow[0];                              // left edge of the Subfield blocks
-  const xt = xs + nodeW + flow[1];                      // left edge of the Topic blocks
+  const xf = gx + 28 + maxW("field") + 8 + nodeW;
+  const xs = xf + flow[0];
+  const xt = xs + nodeW + flow[1];
   const gxr = xt + nodeW + 8 + maxW("topic") + 28;
   const width = Math.round(gxr + 76);
 
-  // --- vertical positions: every column stretches to the tallest
   const sizes = Object.fromEntries(KINDS.map(k => [k, order[k].map(n => m.counts[k].get(n) * unit)]));
   const gaps = {
     field: fields.map((_, i) => i ? gap + 6 : 0),
@@ -243,9 +240,8 @@ function draw(talks) {
   const heading = (x, anchor, text) => svgEl("text", { x, y: 28, class: "heading", "text-anchor": anchor }, svg).textContent = text;
   heading(xf - nodeW - 8, "end", "Main field");
   heading(xs, "start", "Subfield");
-  heading(xt + nodeW + 8, "start", "Topic tags");
+  heading(xt + nodeW + 8, "start", "Tags");
 
-  // --- group bands behind the topic column (shown on legend hover)
   const bands = groups.map((_, g) => {
     const ns = topics.filter(t => groupOf(t) === g).map(t => nodes.topic.get(t));
     if (!ns.length) return null;
@@ -253,7 +249,6 @@ function draw(talks) {
     return svgEl("rect", { x: xt - 10, y: a, width: gxr + 16 - (xt - 10), height: b - a, rx: 8, fill: groupColor(g), class: "band" }, svg);
   });
 
-  // --- ribbons: tapered so block heights equal tag counts at both ends
   const ribbonLayer = svgEl("g", {}, svg), ribbonEls = [];
   m.segs.forEach((list, s) => {
     const [ka, kb] = [KINDS[s], KINDS[s + 1]];
@@ -270,7 +265,6 @@ function draw(talks) {
     });
   });
 
-  // --- nodes (Subfield labels sit over the ribbons, so they get a halo)
   const nodeEls = [];
   const addNode = (kind, n, x, anchor, textX, cls = "") => {
     const g = svgEl("g", { class: "node" }, svg);
@@ -283,7 +277,6 @@ function draw(talks) {
   nodes.sub.forEach(n => addNode("sub", n, xs, "start", xs + nodeW + 6, "halo"));
   nodes.topic.forEach(n => addNode("topic", n, xt, "start", xt + nodeW + 8));
 
-  // --- overlap arcs in the outer margins (fields on the left, topics on the right)
   const dotEls = new Map(), arcEls = [];
   const side = {
     field: { x: gx, dir: -1, width: k => 4 + 4 * (k - 1), leaderTo: n => xf - nodeW - 8 - textW(label("field", n.name)) - 8 },
@@ -309,7 +302,6 @@ function draw(talks) {
     }
   }
 
-  // --- legend for the topic groups
   groups.forEach((name, g) => {
     if (!bands[g]) return;
     const span = document.createElement("span");
@@ -321,8 +313,6 @@ function draw(talks) {
   /* ============================== INTERACTION ============================== */
   const sentence = (title, ts) => `${title} (${ts.length} talk${ts.length === 1 ? "" : "s"}): ${ts.map(describe).join(" · ")}`;
 
-  // Highlight whole talks: every tag, ribbon and arc that belongs to the chosen talks stays lit.
-  // `onlyTopics` (a Set) narrows the topic side, used for the legend groups.
   function highlight(chosen, caption, band = -1, onlyTopics = null) {
     const lit = Object.fromEntries(KINDS.map(k => [k, new Set(chosen.flatMap(t => t[PROP[k]]))]));
     if (onlyTopics) lit.topic = new Set([...lit.topic].filter(t => onlyTopics.has(t)));
