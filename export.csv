@@ -1,5 +1,5 @@
-﻿Meeting name,Speaker,Associated Institution,Main Field,Subfield,Topic Tags
-Dynamic predictive coding,Will Yun-Farmbrough,University of Sussex,Neuroscience,Computational Neuroscience,"Computational neurophenomenology, Perception, Predictive coding, Vision"
+﻿Talk,Speaker,Associated Institution,Main Field,Subfield,Tags
+Dynamic predictive coding,Will Yun-Farmbrough,University of Sussex,Neuroscience,"Computational Cognitive Science, Computational Neuroscience","Computational neurophenomenology, Perception, Predictive coding, Vision"
 Dementia neurophysiology,Dr Francesco Tamagnini,University of Reading,Neuroscience,Molecular and Cellular Neuroscience,"Biomarkers, Dementia, Neurophysiology"
 Naïve realism,Prof Fiona Macpherson,University of Glasgow,Philosophy,Philosophy of Mind,"Illusion, Perception, Vision"
 Psychedelic-assisted therapy,Jocelyn Rose,Brighton and Sussex Medical School,Psychology,Clinical Psychology,"Clinical trials, Ethics, Psychedelics"
@@ -9,12 +9,12 @@ Idealisation and modelling,Dr Marek Pokropski,University of Warsaw,Philosophy,Ph
 Illusion game,Oliver Collins,University of Sussex,Psychology,Cognitive Psychology,"Illusion, Perception, Vision"
 Involuntary thoughts and attention,Dr Sophie Forster,University of Sussex,Neuroscience,"Cognitive Neuroscience, Cognitive Psychology",Attention
 Constructive reinforcement learning,Dr Dhruva Raman,University of Sussex,Neuroscience,Computational Neuroscience,Reinforcement learning
-Functional connectivity at SCCS,Dr Lionel Barnett,University of Sussex,Neuroscience,Computational Neuroscience,"Functional connectivity, Statistics"
+Functional connectivity at SCCS,Dr Lionel Barnett,University of Sussex,Neuroscience,Systems Neuroscience,"Functional connectivity, Statistics"
 Active divergence in generative models,Dr Terence Broad,UAL,Art,Creative Computing,Generative models
-Emerging questions in AI welfare,"Dr Geoff Keeling, Winnie Street",Google,Philosophy,Philosophy of Mind,"Cognition and neuro --> AI, Consciousness science, Ethics"
+Emerging questions in AI welfare,"Dr Geoff Keeling, Winnie Street",Google,Philosophy,Philosophy of Mind,"Cognition and neuro -> AI, Consciousness science, Ethics"
 On-Off coding is latent in vertebrate visual circuits,Xinwei Wang,University of Sussex,Neuroscience,"Sensory Neuroscience, Systems Neuroscience","Neurophysiology, Vision"
-LLM-driven behaviour models,Dr Kim Stachenfeld,"Columbia University, Google DeepMind",Neuroscience,"Artificial Intelligence, Computational Neuroscience","AI-> cognition and neuro, Automated scientific discovery, Explainable / interpretable AI, Model selection, Reinforcement learning"
+LLM-driven behaviour models,Dr Kim Stachenfeld,"Columbia University, Google DeepMind",Neuroscience,"Artificial Intelligence, Computational Neuroscience","AI -> cognition and neuro, Automated scientific discovery, Explainable / interpretable AI, Model selection, Reinforcement learning"
 Olfaction and behaviour in naked mole rats,Dr Mohammed Khallaf,Max Delbrück Center,Neuroscience,Behavioural Neuroscience,"Olfaction, Social behaviour"
-Inductive biases in natural systems,Prof Michael J. Tarr,Carnegie Mellon University,Neuroscience,"Artificial Intelligence, Cognitive Neuroscience, Computational Neuroscience","Cognition and neuro --> AI, Model efficiency"
-Reclaiming AI as a theoretical tool for cognitive science ,Prof. Iris van Rooij,"Donders Institute, Radboud University",Cognitive Science,"Artificial Intelligence, Computational Cognitive Science, Philosophy of Science",AI-> cognition and neuro
+Inductive biases in natural systems,Prof Michael J. Tarr,Carnegie Mellon University,Neuroscience,"Artificial Intelligence, Cognitive Neuroscience, Computational Neuroscience","Cognition and neuro -> AI, Model efficiency"
+Reclaiming AI as a theoretical tool for cognitive science ,Prof. Iris van Rooij,"Donders Institute, Radboud University",Cognitive Science,"Artificial Intelligence, Computational Cognitive Science, Philosophy of Science",AI -> cognition and neuro
 Neurosymbolic Integration and Scaling,Prof. Artur d'Avila Garcez,"City St George's, University of London",Computer Science,Artificial Intelligence,"Ethics, Explainable / interpretable AI, Model efficiency, Neuro-symbolic AI"
