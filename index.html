@@ -49,7 +49,7 @@
 const CONFIG = {
   csv: "export.csv",
   columns: { title: "Talk", speaker: "Speaker", institution: "Associated Institution",
-             fields: "Main Field", subs: "Subfield", topics: "Tags" },
+             fields: "Main Field", subs: "Subfield", topics: "Tags", link: "Talk link" },
   parents: { "Artificial Intelligence": "Computer Science", "Creative Computing": "Art" },
   fallback: "Unassigned",
   honorifics: /^(Dr|Prof|Professor)\.?\s+/i,
@@ -123,6 +123,7 @@ function readTalks(rows) {
   const orFallback = xs => xs.length ? xs : [fallback];
   return rows.map(r => ({
     title: (r[c.title] || "").trim(),
+    link: (r[c.link] || "").trim(),
     speaker: split(r[c.speaker]).map(n => n.replace(honorifics, "")).join(" & "),
     institution: split(r[c.institution]).join(" / "),
     fields: orFallback(split(r[c.fields])),
@@ -131,7 +132,10 @@ function readTalks(rows) {
   })).filter(t => t.title && t.topics.length);
 }
 
-const describe = t => t.title + (t.speaker ? ` (${t.speaker}${t.institution ? ", " + t.institution : ""})` : "");
+const describeTitle = t => t.link
+  ? `<a href="${t.link}" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline;text-underline-offset:2px;">${t.title}</a>`
+  : t.title;
+const describe = t => describeTitle(t) + (t.speaker ? ` (${t.speaker}${t.institution ? ", " + t.institution : ""})` : "");
 
 function buildModel(talks) {
   const counts = Object.fromEntries(KINDS.map(k => [k, new Map()]));
@@ -311,6 +315,8 @@ function draw(talks) {
 
   /* ============================== INTERACTION ============================== */
   const sentence = (title, ts) => `${title} (${ts.length} talk${ts.length === 1 ? "" : "s"}): ${ts.map(describe).join(" · ")}`;
+  const lockHint = `<span style="font-size:11px;color:var(--muted);margin-left:8px;">· click again or click outside to unlock</span>`;
+  const setCaption = html => { $("caption").innerHTML = html + (locked ? lockHint : ""); };
 
   function highlight(chosen, caption, band = -1, onlyTopics = null) {
     const lit = Object.fromEntries(KINDS.map(k => [k, new Set(chosen.flatMap(t => t[PROP[k]]))]));
@@ -322,7 +328,7 @@ function draw(talks) {
     ribbonEls.forEach(r => r.el.classList.toggle("on", used(r) && (!onlyTopics || !r.topicSide || onlyTopics.has(r.b))));
     arcEls.forEach(p => p.el.classList.toggle("on", used(p) && p.tags.every(t => lit[p.kind].has(t))));
     bands.forEach((b, i) => b && b.classList.toggle("on", i === band));
-    $("caption").textContent = caption;
+    setCaption(caption);
   }
   m.segs[1].forEach(r => r.topicSide = true);
 
@@ -338,16 +344,29 @@ function draw(talks) {
   }
 }
 
+let locked = false;
+
 function onHover(el, handler) {
   el.style.cursor = "pointer";
-  el.addEventListener("mouseenter", handler);
-  el.addEventListener("click", handler);
-  el.addEventListener("mouseleave", clearHighlight);
+  el.addEventListener("mouseenter", () => { if (!locked) handler(); });
+  el.addEventListener("click", e => {
+    if (locked) { locked = false; clearHighlight(); }
+    else { locked = true; handler(); }
+  });
+  el.addEventListener("mouseleave", () => { if (!locked) clearHighlight(); });
 }
 function clearHighlight() {
+  locked = false;
   $("svg").classList.remove("dim");
-  $("caption").innerHTML = "&nbsp;";
+  $("caption").innerHTML = '&nbsp;<span style="font-size:11px;color:var(--muted)"></span>';
 }
+
+// click anywhere on the background to unlock
+document.addEventListener("click", e => {
+  if (locked && !e.target.closest("#chart, #legend, #caption")) {
+    clearHighlight();
+  }
+});
 
 /* ============================== LOAD ============================== */
 fetch(CONFIG.csv)
