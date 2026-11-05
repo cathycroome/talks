@@ -34,12 +34,18 @@
   #legend span { cursor:pointer; }
   #legend i { display:inline-block; width:10px; height:10px; margin-right:5px; border-radius:2px; }
   #caption { min-height:5.6em; margin-top:10px; font-size:13px; }
+  #tog-singles { background:none; border:1px solid var(--muted); color:var(--muted); border-radius:4px;
+    padding:3px 10px; font-size:11px; cursor:pointer; margin-left:12px; vertical-align:middle;
+    transition:border-color .15s,color .15s; }
+  #tog-singles:hover { border-color:var(--fg); color:var(--fg); }
+  #tog-singles.active { border-color:var(--fg); color:var(--fg); background:rgba(255,255,255,.07); }
 
 </style>
 </head>
 <body>
 
-<h1 id="page-title">Sussex Neuroscience PhD Year 1: Attended Talks</h1>
+<h1 id="page-title" style="display:inline;margin:0 0 12px;">Sussex Neuroscience PhD Year 1: Attended Talks</h1>
+<button id="tog-singles">Hide singles</button>
 <div id="chart"><svg id="svg"></svg></div>
 <div id="legend-wrap">
   <div id="legend"></div>
@@ -377,10 +383,61 @@ document.addEventListener("click", e => {
   }
 });
 
-/* ============================== LOAD ============================== */
+/* ============================== LOAD + TOGGLE ============================== */
+let allTalks = [], hideSingles = false;
+
+function counts(talks, prop) {
+  const c = new Map();
+  for (const t of talks) for (const tag of t[prop]) c.set(tag, (c.get(tag)||0) + 1);
+  return c;
+}
+
+function visibleTalks() {
+  if (!hideSingles) return allTalks;
+  // Iterate until stable: stripping singletons may cause new singletons
+  let talks = allTalks;
+  for (let i = 0; i < 10; i++) {
+    const fc = counts(talks, "fields");
+    const sc = counts(talks, "subs");
+    const tc = counts(talks, "topics");
+    const next = talks
+      .map(t => ({
+        ...t,
+        fields: t.fields.filter(f => fc.get(f) > 1),
+        subs:   t.subs.filter(s => sc.get(s) > 1),
+        topics: t.topics.filter(x => tc.get(x) > 1),
+      }))
+      .filter(t => t.fields.length && t.subs.length);
+    const same = next.length === talks.length &&
+      next.every((t, i) => t.fields.join() === talks[i].fields.join() &&
+                           t.subs.join() === talks[i].subs.join() &&
+                           t.topics.join() === talks[i].topics.join());
+    talks = next;
+    if (same) break;
+  }
+  return talks;
+}
+
+function redraw() {
+  const talks = visibleTalks();
+  if (hideSingles) {
+    CONFIG.gap = 8; CONFIG.clusterGap = 20;
+  } else {
+    CONFIG.gap = 4; CONFIG.clusterGap = 12;
+  }
+  draw(talks);
+}
+
+$("tog-singles").addEventListener("click", () => {
+  hideSingles = !hideSingles;
+  $("tog-singles").classList.toggle("active", hideSingles);
+  $("tog-singles").textContent = hideSingles ? "Show singles" : "Hide singles";
+  redraw();
+});
+
 fetch(CONFIG.csv)
   .then(r => { if (!r.ok) throw new Error(r.status); return r.text(); })
-  .then(text => draw(readTalks(parseCSV(text))))
+  .then(text => { allTalks = readTalks(parseCSV(text)); redraw(); })
   .catch(err => { $("caption").textContent = `Could not load ${CONFIG.csv} (${err.message}). Is it next to this page and served over http?`; });
 </script>
 </body>
