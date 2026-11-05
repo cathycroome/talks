@@ -1,6 +1,6 @@
 # Sankey flow diagram of attended talks
 
-- Talks are from September 2026 onwards
+- Talks are from September 2026 to last commit date
 - Categorised by field, subfield, topic and themes
 - <https://cathycroome.github.io/talks/>
 
