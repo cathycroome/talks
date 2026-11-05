@@ -6,8 +6,10 @@
 <title>Talks: field, subfield and topic tags</title>
 <style>
   :root { --bg:#171717; --fg:#eee; --muted:#9a9a9a; color-scheme: dark; } 
-  body { margin:0; padding:24px 16px; background:var(--bg); color:var(--fg);
+  body { margin:0; padding:16px 16px; background:var(--bg); color:var(--fg);
          font:14px/1.4 -apple-system,"Segoe UI",Helvetica,Arial,sans-serif; }
+  #page-title { font-size:15px; font-weight:600; color:var(--fg); letter-spacing:-.01em;
+                margin:0 0 12px; }
   #chart { overflow-x:auto; }
   svg { display:block; max-width:none; margin:0 auto; }
   text { fill:var(--fg); font-size:12px; }
@@ -32,7 +34,7 @@
   #legend span { cursor:pointer; }
   #legend i { display:inline-block; width:10px; height:10px; margin-right:5px; border-radius:2px; }
   #caption { min-height:5.6em; margin-top:10px; font-size:13px; }
-  #page-title { font-size:16px; font-weight:600; margin:0 0 16px; color:var(--fg); letter-spacing:-.01em; }
+
 </style>
 </head>
 <body>
@@ -55,12 +57,11 @@ const CONFIG = {
   honorifics: /^(Dr|Prof|Professor)\.?\s+/i,
 
   clusters: {
-    "Perception & sensation": ["Vision", "Perception", "Illusion", "Sensation", "Touch", "Olfaction", "Attention"],
-    "Mind & consciousness":   ["Consciousness science", "Computational neurophenomenology", "Philosophy of mind",
+    "Sensory modalities":     ["Vision", "Touch", "Olfaction"],
+    "Mind & consciousness":   ["Consciousness", "Illusion", "Computational neurophenomenology", "Philosophy of mind",
                                "Philosophy of science", "Predictive coding", "Intelligence", "Critique",
-                               "Agency", "Reality"],
-    "Brain & behaviour":      ["Neurophysiology", "Functional connectivity", "Behaviour", "Social behaviour", "Decision making",
-                               "Memory"],
+                               "Agency", "Reality", "Perception", "Attention", "Memory"],
+    "Brain & behaviour":      ["Neurophysiology", "Functional connectivity", "fMRI", "Behaviour", "Social behaviour", "Decision making"],
     "AI, ML & statistics":    ["AI -> cognition and neuro", "Cognition and neuro -> AI", "Generative models",
                                "Generative modelling", "Reinforcement learning", "Computer vision", "Creative computing",
                                "Automated scientific discovery", "Model selection", "Model efficiency", "Statistics",
@@ -76,7 +77,7 @@ const CONFIG = {
   palette:        ["#ee6a5e","#e0884f","#e9b95f","#5fb58a","#e07aa5","#b48ae0","#6aa7e8","#4fc1c9","#b98b6e","#c4cf6a"],
   clusterPalette: ["#5aa9c9","#c98cd8","#8fc46a","#f0a04b","#e8667a","#8a8fe0","#d9c05a"],
 
-  unit: 13, gap: 4, clusterGap: 12, top: 50, nodeW: 14,
+  unit: 11, gap: 4, clusterGap: 12, top: 50, nodeW: 14,
   flow: [230, 420],
 };
 
@@ -131,7 +132,7 @@ function readTalks(rows) {
     fields: orFallback(split(r[c.fields])),
     subs: orFallback(split(r[c.subs])),
     topics: split(r[c.topics]),
-  })).filter(t => t.title && t.topics.length);
+  })).filter(t => t.title);
 }
 
 const describeTitle = t => t.link
@@ -148,7 +149,7 @@ function buildModel(talks) {
   for (const talk of talks) {
     const tags = KINDS.map(k => talk[PROP[k]]);
     KINDS.forEach((k, i) => tags[i].forEach(x => bump(counts[k], x)));
-    for (const s of [0, 1]) for (const a of tags[s]) for (const b of tags[s + 1]) {
+    for (const s of [0, 1]) if (tags[s + 1].length) for (const a of tags[s]) for (const b of tags[s + 1]) {
       const key = a + "\0" + b;
       const r = segs[s].get(key) || segs[s].set(key, { a, b, left: 0, right: 0, talks: [] }).get(key);
       r.left += 1 / tags[s + 1].length;
@@ -157,6 +158,7 @@ function buildModel(talks) {
     }
     for (const kind of ["field", "topic"]) {
       const list = talk[PROP[kind]];
+      if (!list.length) continue;
       for (let i = 0; i < list.length; i++) for (let j = i + 1; j < list.length; j++) {
         const key = [list[i], list[j]].sort().join("\0");
         const p = pairs[kind].get(key) || pairs[kind].set(key, { kind, tags: [list[i], list[j]], talks: [] }).get(key);
@@ -218,7 +220,8 @@ function draw(talks) {
   const gxr = xt + nodeW + 8 + maxW("topic") + 28;
   const width = Math.round(gxr + 76);
 
-  const sizes = Object.fromEntries(KINDS.map(k => [k, order[k].map(n => m.counts[k].get(n) * unit)]));
+  const nodeH = n => Math.round(Math.pow(n, 0.65) * unit);
+  const sizes = Object.fromEntries(KINDS.map(k => [k, order[k].map(n => nodeH(m.counts[k].get(n)))]));
   const gaps = {
     field: fields.map((_, i) => i ? gap + 6 : 0),
     sub: subs.map((s, i) => i ? (parentField(subs[i - 1]) === parentField(s) ? gap : clusterGap) : 0),
@@ -234,7 +237,10 @@ function draw(talks) {
   const nodes = {};
   for (const k of KINDS) {
     nodes[k] = new Map();
-    stack(k).forEach((y, i) => nodes[k].set(order[k][i], { name: order[k][i], y, h: sizes[k][i], inUsed: 0, outUsed: 0, color: color[k](order[k][i]) }));
+    stack(k).forEach((y, i) => {
+      const name = order[k][i], count = m.counts[k].get(name), h = sizes[k][i];
+      nodes[k].set(name, { name, y, h, count, inUsed: 0, outUsed: 0, color: color[k](name) });
+    });
   }
   const mid = n => n.y + n.h / 2;
 
@@ -259,11 +265,12 @@ function draw(talks) {
     const [ka, kb] = [KINDS[s], KINDS[s + 1]];
     const xa = s ? xs + nodeW : xf, xb = s ? xt : xs, mx = (xa + xb) / 2;
     for (const a of order[ka]) list.filter(r => r.a === a).sort((p, q) => order[kb].indexOf(p.b) - order[kb].indexOf(q.b))
-      .forEach(r => { const n = nodes[ka].get(a); r.y1 = n.y + n.outUsed; n.outUsed += r.left * unit; });
+      .forEach(r => { const n = nodes[ka].get(a); r.y1 = n.y + n.outUsed; n.outUsed += r.left * (n.h / n.count); });
     for (const b of order[kb]) list.filter(r => r.b === b).sort((p, q) => order[ka].indexOf(p.a) - order[ka].indexOf(q.a))
-      .forEach(r => { const n = nodes[kb].get(b); r.y2 = n.y + n.inUsed; n.inUsed += r.right * unit; });
+      .forEach(r => { const n = nodes[kb].get(b); r.y2 = n.y + n.inUsed; n.inUsed += r.right * (n.h / n.count); });
     list.forEach(r => {
-      const w1 = r.left * unit, w2 = r.right * unit;
+      const na = nodes[ka].get(r.a), nb = nodes[kb].get(r.b);
+      const w1 = r.left * (na.h / na.count), w2 = r.right * (nb.h / nb.count);
       r.el = svgEl("path", { class: "ribbon", fill: nodes[ka].get(r.a).color,
         d: `M${xa},${r.y1} C${mx},${r.y1} ${mx},${r.y2} ${xb},${r.y2} L${xb},${r.y2 + w2} C${mx},${r.y2 + w2} ${mx},${r.y1 + w1} ${xa},${r.y1 + w1} Z` }, ribbonLayer);
       ribbonEls.push(r);
