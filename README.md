@@ -68,7 +68,7 @@ Broad home of the talk, classified by what the main claim is about and the appro
 
 Many talks are tagged with more than one subfield. Subfields are defined along different axes (what is studied, at what level, with what approach), and any combination can apply. These are rules of thumb, not strict boundaries.
 
-#### Neuroscience
+**Neuroscience**
 
 *What was studied?*
 
@@ -88,7 +88,7 @@ Many talks are tagged with more than one subfield. Subfields are defined along d
 - To computationally or mathematically model brain structure or function, at any level from biophysical to abstract → **Computational (or Theoretical) Neuroscience**
 - The clinical application of neuroscience research to develop treatments for nervous systems disorders → **Translational neuroscience**
 
-#### Psychology
+**Psychology**
 
 Typically behaviour is analysed to target cognitive processes, without neural recordings
 
@@ -99,7 +99,7 @@ Typically behaviour is analysed to target cognitive processes, without neural re
 - Cognition or behaviour across the lifespan → **Developmental Psychology**
 - Human learning, typically in educational settings → **Educational Psychology**
 
-#### Philosophy
+**Philosophy**
 
 Subfields are of two kinds, which sit at the same level and are often combined:
 
@@ -109,12 +109,12 @@ Subfields are of two kinds, which sit at the same level and are often combined:
   - What follows from what? → **Logic**
   - **Ethics** is an exception and is tagged as a topic rather than a subfield so it can link talks across fields
 
-#### Computer Science
+**Computer Science**
 
 - Most exposure to Computer Science is through Artificial Intelligence
 - Machine learning is generally seen as the method and is tagged in theme rather than subfield
 
-#### Cognitive Science
+**Cognitive Science**
 
 - Most Cognitive Science subfields are shared with the other fields (Cognitive Neuroscience, Cognitive Psychology, Philosophy of Mind, Artificial Intelligence, etc.)
 - Computational modelling of cognition that isn't directly modelling the nervous system → **Computational Cognitive Science**
