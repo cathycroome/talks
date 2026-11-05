@@ -33,8 +33,9 @@ Open <http://localhost:8000>
 
 Linked videos may be a similar talk (same title) in another venue
 
+## More info on attempt to classify research into fields and subfields
 <details>
-<summary>## More info on attempt to classify research into fields and subfields</summary>
+<summary>See rules of thumb</summary>
 
 > **NB:** Classifications are not necessarily how speakers would describe their own research. They reflect an attempt to learn how different fields and subfields define themselves & disagreement is welcome.
 
