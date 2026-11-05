@@ -33,10 +33,10 @@ Open <http://localhost:8000>
 
 Linked videos may be a similar talk (same title) in another venue
 
+<details>
+<summary>## More info on attempt to classify research into fields and subfields</summary>
 
-## More info on the attempt to classify and categorise research into fields and subfields
-
-> **NB:** These classifications are not necessarily how speakers would describe their own research. They reflect an attempt to learn how different fields and subfields define themselves & disagreement is welcome.
+> **NB:** Classifications are not necessarily how speakers would describe their own research. They reflect an attempt to learn how different fields and subfields define themselves & disagreement is welcome.
 
 ### Step 1: Main Field
 
@@ -124,3 +124,4 @@ Subfields are of two kinds, which sit at the same level and are often combined:
 
 - Tags are assigned to thematic groupings and these change based on talks that are added
 - This level of classification is generated with Claude; not a priority since themes could be split in many different ways, but having it helps with visual organisation
+</details>
