@@ -4,7 +4,6 @@
 - Categorised by field, subfield, topic and themes
 - <https://cathycroome.github.io/talks/>
 
----
 
 ## Files
 
@@ -12,7 +11,6 @@
 - `index.html` is the HTML of the interactive sankey flow diagram - visualisation of the data using Claude
   - contains the theme classifications
 
----
 
 ## To test locally
 
@@ -23,7 +21,6 @@ python3 -m http.server 8000
 
 Open <http://localhost:8000>
 
----
 
 ## Hide singles
 
@@ -31,13 +28,11 @@ Open <http://localhost:8000>
 - Removing a node and its talk can cause other nodes to drop to one talk so the filter iterates until the chart stabilises
 - "Show singles" restores the full chart
 
----
 
 ## Links to talks
 
 Linked videos may be a similar talk (same title) in another venue
 
----
 
 ## More info on the attempt to classify and categorise research into fields and subfields
 
