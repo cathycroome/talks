@@ -124,5 +124,5 @@ Subfields are of two kinds, which sit at the same level and are often combined:
 ### Step 4: Themes
 
 - Tags are assigned to thematic groupings and these change based on talks that are added
-- This level of classification is generated with Claude; not a priority since themes could be split in many different ways, but having it helps with visual organisation
+- This level of classification is generated mostly with Claude; not a priority since themes could be split in many different ways, but having it helps with visual organisation
 </details>
