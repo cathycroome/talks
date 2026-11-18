@@ -13,8 +13,9 @@
   h1 { margin:0; font-size:15px; font-weight:600; letter-spacing:-.01em; }
   button { background:none; border:1px solid var(--muted); color:var(--muted); border-radius:4px;
            padding:3px 10px; font:inherit; font-size:11px; cursor:pointer; transition:border-color .15s, color .15s; }
-  button:hover, button.active { border-color:var(--fg); color:var(--fg); }
-  button.active { background:rgba(255,255,255,.07); }
+  button:hover:not(:disabled) { border-color:var(--fg); color:var(--fg); }
+  button:disabled { opacity:.35; cursor:default; }
+  #level { font-size:11px; color:var(--muted); }
 
   #chart { overflow-x:auto; }
   svg { display:block; margin:0 auto; }
@@ -47,7 +48,9 @@
 
 <header>
   <h1>Sussex Neuroscience PhD Year 1: Attended Talks</h1>
-  <button id="tog-singles">Hide singles</button>
+  <button id="collapse">Hide singles</button>
+  <button id="expand" hidden>Expand</button>
+  <span id="level"></span>
 </header>
 <div id="chart"><svg id="svg"></svg></div>
 <div id="legend"></div>
@@ -90,6 +93,7 @@ const countBy = (talks, kind) => {
   for (const t of talks) for (const x of t[kind]) c.set(x, (c.get(x) || 0) + 1);
   return c;
 };
+const countAll = talks => Object.fromEntries(KINDS.map(k => [k, countBy(talks, k)]));
 function svgEl(tag, attrs, parent) {
   const el = document.createElementNS("http://www.w3.org/2000/svg", tag);
   for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
@@ -142,7 +146,7 @@ function describe(t) {
 
 // Ribbons between neighbouring columns, and pairs of fields/tags that share a talk
 function buildModel(talks) {
-  const counts = Object.fromEntries(KINDS.map(k => [k, countBy(talks, k)]));
+  const counts = countAll(talks);
   const segs = [new Map(), new Map()];
   const pairs = { fields: new Map(), topics: new Map() };
 
@@ -177,7 +181,7 @@ function draw(talks) {
   if (!talks.length) { $("caption").textContent = "No talks found. Check the column names in CONFIG."; return; }
 
   const { unit, top, nodeW, flow } = CONFIG;
-  const gap = hideSingles ? 8 : 4, themeGap = hideSingles ? 20 : 12;
+  const gap = step ? 8 : 4, themeGap = step ? 20 : 12;   // more room once collapsed
   const { counts, segs, pairs } = buildModel(talks);
 
   // Order: tags by theme then popularity; fields and subfields level with the tags their talks use
@@ -196,22 +200,27 @@ function draw(talks) {
   const fieldPos = f => Math.round(avgTopic("fields", f));
   const fields = [...counts.fields.keys()].sort((a, b) =>
     single(a) - single(b) || fieldPos(a) - fieldPos(b) || counts.fields.get(b) - counts.fields.get(a));
-  const parentField = s => {
+  // A subfield's field: from CONFIG.parents, by name, or else the field most of its talks belong to
+  const parentOf = (s, fieldList, talkList) => {
     if (CONFIG.parents[s]) return CONFIG.parents[s];
-    const byName = fields.filter(f => s.toLowerCase().endsWith(f.toLowerCase()) || s.toLowerCase().startsWith(f.toLowerCase()));
+    const byName = fieldList.filter(f => s.toLowerCase().endsWith(f.toLowerCase()) || s.toLowerCase().startsWith(f.toLowerCase()));
     if (byName.length) return byName.sort((a, b) => b.length - a.length)[0];
-    const w = new Map();   // otherwise the field most of its talks belong to
-    talks.filter(t => t.subs.includes(s)).forEach(t => t.fields.forEach(f => w.set(f, (w.get(f) || 0) + 1 / t.fields.length)));
-    return [...w].sort((a, b) => b[1] - a[1] || fields.indexOf(a[0]) - fields.indexOf(b[0]))[0][0];
+    const w = new Map();
+    talkList.filter(t => t.subs.includes(s)).forEach(t => t.fields.forEach(f => w.set(f, (w.get(f) || 0) + 1 / t.fields.length)));
+    return [...w].sort((a, b) => b[1] - a[1] || fieldList.indexOf(a[0]) - fieldList.indexOf(b[0]))[0][0];
   };
+  // Subfields sit under a visible field, but keep their own field's colour when that field is hidden
+  const allFields = [...countAll(allTalks).fields.keys()];
+  const parentField = s => parentOf(s, fields, talks);
+  const colourField = s => parentOf(s, allFields, allTalks);
   const subs = [...counts.subs.keys()].sort((a, b) =>
     fields.indexOf(parentField(a)) - fields.indexOf(parentField(b)) || avgTopic("subs", a) - avgTopic("subs", b));
   const order = { fields, subs, topics };
   const themes = topics.some(t => themeOf(t) === themeNames.length) ? [...themeNames, "Other"] : themeNames;
 
   const themeColor = g => CONFIG.themePalette[g % CONFIG.themePalette.length];
-  const fieldColor = Object.fromEntries(fields.map((f, i) => [f, CONFIG.fieldColors[f] || CONFIG.fieldPalette[i % CONFIG.fieldPalette.length]]));
-  const color = { fields: f => fieldColor[f], subs: s => fieldColor[parentField(s)], topics: t => themeColor(themeOf(t)) };
+  const fieldColor = Object.fromEntries(allFields.map((f, i) => [f, CONFIG.fieldColors[f] || CONFIG.fieldPalette[i % CONFIG.fieldPalette.length]]));
+  const color = { fields: f => fieldColor[f], subs: s => fieldColor[colourField(s)], topics: t => themeColor(themeOf(t)) };
 
   // Column positions, from measured label widths
   const ctx = document.createElement("canvas").getContext("2d");
@@ -375,19 +384,24 @@ document.addEventListener("click", e => {
   if (locked && !e.target.closest("#chart, #legend, #caption")) clearHighlight();
 });
 
-/* ============================== LOAD + HIDE SINGLES ============================== */
-let allTalks = [], hideSingles = false;
+/* ============================== LOAD + COLLAPSE ============================== */
+// Collapse level n hides fields, subfields and tags with n or fewer talks in the full chart.
+// steps lists the levels that change the chart; step indexes it (0 = full chart).
+let allTalks = [], steps = [0], step = 0;
 
-// Drop fields, subfields and tags used by only one talk; repeat until nothing changes,
-// since removing one can leave another with a single talk
-function visibleTalks() {
-  if (!hideSingles) return allTalks;
-  let talks = allTalks;
+// Talks as shown at a collapse level. After dropping nodes at or below the level, nodes left with a
+// single talk are dropped repeatedly, since removing one can leave another with only one.
+// Talks without a field, subfield and tag are dropped, so every flow runs right through the chart.
+function visibleTalks(level) {
+  if (!level) return allTalks;
+  const prune = (talks, keep) => talks
+    .map(t => ({ ...t, ...Object.fromEntries(KINDS.map(k => [k, t[k].filter(x => keep(k, x))])) }))
+    .filter(t => t.fields.length && t.subs.length && t.topics.length);
+  const full = countAll(allTalks);
+  let talks = prune(allTalks, (k, x) => full[k].get(x) > level);
   for (let i = 0; i < 10; i++) {
-    const counts = Object.fromEntries(KINDS.map(k => [k, countBy(talks, k)]));
-    const next = talks
-      .map(t => ({ ...t, ...Object.fromEntries(KINDS.map(k => [k, t[k].filter(x => counts[k].get(x) > 1)])) }))
-      .filter(t => t.fields.length && t.subs.length);
+    const counts = countAll(talks);
+    const next = prune(talks, (k, x) => counts[k].get(x) > 1);
     const same = JSON.stringify(next) === JSON.stringify(talks);
     talks = next;
     if (same) break;
@@ -395,16 +409,33 @@ function visibleTalks() {
   return talks;
 }
 
-$("tog-singles").addEventListener("click", () => {
-  hideSingles = !hideSingles;
-  $("tog-singles").classList.toggle("active", hideSingles);
-  $("tog-singles").textContent = hideSingles ? "Show singles" : "Hide singles";
-  draw(visibleTalks());
-});
+// Levels that change the chart, stopping before it would be empty
+function findSteps() {
+  steps = [0];
+  let prev = JSON.stringify(allTalks);
+  const maxCount = Math.max(...Object.values(countAll(allTalks)).flatMap(c => [...c.values()]));
+  for (let level = 1; level < maxCount; level++) {
+    const talks = visibleTalks(level);
+    if (!talks.length) break;
+    const json = JSON.stringify(talks);
+    if (json !== prev) { steps.push(level); prev = json; }
+  }
+}
+
+function render() {
+  const level = steps[step];
+  $("collapse").textContent = step ? "Collapse further" : "Hide singles";
+  $("collapse").disabled = step === steps.length - 1;
+  $("expand").hidden = step === 0;
+  $("level").textContent = level >= 2 ? `Hiding anything with ${level} or fewer talks` : "";
+  draw(visibleTalks(level));
+}
+$("collapse").addEventListener("click", () => { step++; render(); });
+$("expand").addEventListener("click", () => { step--; render(); });
 
 fetch(CONFIG.csv)
   .then(r => { if (!r.ok) throw new Error(r.status); return r.text(); })
-  .then(text => { allTalks = readTalks(parseCSV(text)); draw(allTalks); })
+  .then(text => { allTalks = readTalks(parseCSV(text)); findSteps(); render(); })
   .catch(err => { $("caption").textContent = `Could not load ${CONFIG.csv} (${err.message}). Is it next to this page and served over http?`; });
 </script>
 </body>

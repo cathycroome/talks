@@ -22,11 +22,15 @@ python3 -m http.server 8000
 Open <http://localhost:8000>
 
 
-## Hide singles
+## Hide singles and collapse
 
 - "Hide singles" button removes any node from the chart that is only associated with one talk (applies across main field, subfield, and topic tag)
 - Removing a node and its talk can cause other nodes to drop to one talk so the filter iterates until the chart stabilises
-- "Show singles" restores the full chart
+- A talk is only kept if it still has a main field, subfield and tag, so every flow runs all the way through the chart
+- "Collapse further" then hides nodes with 2 or fewer talks, then 3 or fewer, and so on
+  - Counts are from the full chart, so a node that drops to 2 talks after hiding singles is kept until its original count is reached
+  - Levels that wouldn't change the chart are skipped, and the button is greyed out before a level that would leave no tags
+- "Expand" steps back one level
 
 
 ## Links to talks
